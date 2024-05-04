@@ -1,0 +1,99 @@
+plugins {
+    id 'de.undercouch.download'
+    id 'maven-publish'
+}
+
+repositories {
+    mavenCentral()
+}
+
+
+import groovy.json.JsonSlurper
+import net.neoforged.minecraftmetadata.*
+
+tasks.register('downloadVersionManifest', Download) {
+    src 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'
+    dest layout.buildDirectory.file('manifest/version_manifest_v2.json')
+    useETag 'all'
+    onlyIfModified true
+    quiet true
+}
+
+tasks.register('downloadJson', DownloadWithVersion) {
+    dependsOn tasks.downloadVersionManifest
+    def moduleVersion = it.moduleVersion
+    def manifest = tasks.downloadVersionManifest.dest
+    inputs.file manifest
+    src {
+        new JsonSlurper().parse(manifest).versions.find{ it.id == moduleVersion.get() }.url
+    }
+    dest layout.buildDirectory.file(moduleVersion.map { "versions/$it/version.json"})
+    useETag 'all'
+    onlyIfModified true
+    quiet true
+}
+
+tasks.register('downloadClientJar', DownloadWithVersion) {
+    dependsOn tasks.downloadJson
+    def versionJson = tasks.downloadJson.dest
+    inputs.file versionJson
+    src {
+        new JsonSlurper().parse(versionJson).downloads.client.url
+    }
+    dest layout.buildDirectory.file(moduleVersion.map { "versions/$it/client.jar"})
+    useETag 'all'
+    onlyIfModified true
+    quiet true
+}
+
+tasks.register('downloadServerJar', DownloadWithVersion) {
+    dependsOn tasks.downloadJson
+    def versionJson = tasks.downloadJson.dest
+    inputs.file versionJson
+    src {
+        new JsonSlurper().parse(versionJson).downloads.server.url
+    }
+    dest layout.buildDirectory.file(moduleVersion.map { "versions/$it/server.jar"})
+    useETag 'all'
+    onlyIfModified true
+    quiet true
+}
+
+tasks.register('makeModuleMetadata', GenerateModuleMetadata) {
+    dependsOn tasks.downloadJson
+    dependsOn tasks.downloadClientJar
+    dependsOn tasks.downloadServerJar
+
+    meta = tasks.downloadJson.dest
+    clientJar = tasks.downloadClientJar.dest
+    serverJar = tasks.downloadServerJar.dest
+
+    moduleGroup = project.group
+    moduleName = project.name
+    outputFile = layout.buildDirectory.file("publications/metadata.module")
+}
+
+configurations {
+    moduleMetadata
+}
+def moduleMetadataArtifact = artifacts.add('moduleMetadata', tasks.makeModuleMetadata.outputFile) {
+    type = "module"
+    builtBy tasks.makeModuleMetadata
+}
+
+publishing {
+    publications {
+        timed(MavenPublication) {
+            artifactId rootProject.name
+            version project.providers.gradleProperty('minecraftVersion').orElse('undefined').get()
+            artifact moduleMetadataArtifact
+            pom {
+                withXml {
+                    def elem = asElement()
+                    def comment = elem.getOwnerDocument().createComment(' do_not_remove: published-with-gradle-metadata ')
+                    elem.insertBefore(comment, elem.getFirstChild())
+                }
+            }
+        }
+    }
+}

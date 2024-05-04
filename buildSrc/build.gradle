@@ -1,0 +1,8 @@
+repositories {
+    maven { url = 'https://maven.neoforged.net/releases/'}
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'de.undercouch.download:de.undercouch.download.gradle.plugin:5.5.0'
+}
