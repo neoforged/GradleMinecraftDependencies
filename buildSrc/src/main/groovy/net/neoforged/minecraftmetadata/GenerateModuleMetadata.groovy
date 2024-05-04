@@ -1,15 +1,12 @@
 package net.neoforged.minecraftmetadata
 
-
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import groovy.transform.CompileStatic
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
-import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.tasks.*
-import org.gradle.api.tasks.options.Option
 
 import javax.inject.Inject
 import java.security.DigestInputStream
