@@ -188,6 +188,8 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
                         server.add(it.split('\t')[1])
                     }
                 }
+            } else {
+                throw new RuntimeException("Could not find libraries.list inside of server.jar")
             }
         }
     }
