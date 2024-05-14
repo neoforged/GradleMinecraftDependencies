@@ -53,7 +53,7 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
 
         List<String> clientDeps = []
         List<String> serverDeps = []
-        Map<String, List> clientNatives = [:]
+        Map<String, List<String>> clientNatives = [:]
         getMcDeps(serverDeps, clientDeps, clientNatives)
 
         Map metaJson = new JsonSlurper().parse(meta.get().asFile) as Map
@@ -61,7 +61,12 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
 
         List clientDepEntries = []
         List serverDepEntries = []
-        clientDepEntries.add([
+        clientDepEntries.addAll(depsOf(clientDeps))
+        serverDepEntries.addAll(depsOf(serverDeps))
+        // Make a second list that depends on the natives at runtime
+        List clientDepEntriesForRuntime = []
+        clientDepEntriesForRuntime.addAll(clientDepEntries)
+        clientDepEntriesForRuntime.add([
                 group                : moduleGroup.get(),
                 module               : moduleName.get(),
                 version              : [strictly: moduleVersion.get()],
@@ -73,31 +78,65 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
                         ]
                 ]
         ])
-        clientDepEntries.addAll(depsOf(clientDeps))
-        serverDepEntries.addAll(depsOf(serverDeps))
+        // Add an entry for the objc-bridge which is also needed at compiletime regardless of platform
+        def objcBridge = clientNatives["osx"].find { it.startsWith("ca.weblite:java-objc-bridge") }
+        if (objcBridge) {
+            clientDepEntries.add(depOf(objcBridge))
+        }
+
         variants.add([
-                name        : 'clientDependencies',
+                name        : 'clientCompileDependencies',
                 attributes  : [
+                        'org.gradle.usage'          : 'java-api',
                         'org.gradle.jvm.version'    : javaVersion,
                         'net.neoforged.distribution': 'client'
                 ],
                 dependencies: clientDepEntries,
                 capabilities: [[
                                        group  : moduleGroup.get(),
-                                       name   : moduleName.get() + "-dependencies",
+                                       name   : moduleName.get(),
                                        version: moduleVersion.get(),
                                ]]
         ])
         variants.add([
-                name        : 'serverDependencies',
+                name        : 'clientRuntimeDependencies',
                 attributes  : [
+                        'org.gradle.usage'          : 'java-runtime',
+                        'org.gradle.jvm.version'    : javaVersion,
+                        'net.neoforged.distribution': 'client'
+                ],
+                dependencies: clientDepEntriesForRuntime,
+                capabilities: [[
+                                       group  : moduleGroup.get(),
+                                       name   : moduleName.get(),
+                                       version: moduleVersion.get(),
+                               ]]
+        ])
+        variants.add([
+                name        : 'serverCompileDependencies',
+                attributes  : [
+                        'org.gradle.usage'          : 'java-api',
                         'org.gradle.jvm.version'    : javaVersion,
                         'net.neoforged.distribution': 'server'
                 ],
                 dependencies: serverDepEntries,
                 capabilities: [[
                                        group  : moduleGroup.get(),
-                                       name   : moduleName.get() + "-dependencies",
+                                       name   : moduleName.get(),
+                                       version: moduleVersion.get(),
+                               ]]
+        ])
+        variants.add([
+                name        : 'serverRuntimeDependencies',
+                attributes  : [
+                        'org.gradle.usage'          : 'java-runtime',
+                        'org.gradle.jvm.version'    : javaVersion,
+                        'net.neoforged.distribution': 'server'
+                ],
+                dependencies: serverDepEntries,
+                capabilities: [[
+                                       group  : moduleGroup.get(),
+                                       name   : moduleName.get(),
                                        version: moduleVersion.get(),
                                ]]
         ])
@@ -107,6 +146,7 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
             variants.add([
                     name        : 'client' + os.capitalize() + 'Natives',
                     attributes  : [
+                            'org.gradle.usage'             : 'java-runtime',
                             'org.gradle.jvm.version'       : javaVersion,
                             'net.neoforged.distribution'   : 'client',
                             'net.neoforged.operatingsystem': os
