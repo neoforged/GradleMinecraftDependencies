@@ -1,4 +1,4 @@
-package net.neoforged.minecraftmetadata
+package net.neoforged.minecraftdependencies
 
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input

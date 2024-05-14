@@ -1,4 +1,4 @@
-package net.neoforged.minecraftmetadata
+package net.neoforged.minecraftdependencies
 
 import de.undercouch.gradle.tasks.download.Download
 

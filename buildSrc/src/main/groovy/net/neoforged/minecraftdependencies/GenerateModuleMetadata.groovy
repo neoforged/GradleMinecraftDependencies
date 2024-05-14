@@ -1,4 +1,4 @@
-package net.neoforged.minecraftmetadata
+package net.neoforged.minecraftdependencies
 
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
@@ -9,8 +9,6 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
 
 import javax.inject.Inject
-import java.security.DigestInputStream
-import java.security.MessageDigest
 import java.util.zip.ZipFile
 
 @CompileStatic
@@ -32,6 +30,7 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
 
     @Input
     abstract Property<String> getModuleGroup()
+
     @Input
     abstract Property<String> getModuleName()
 
@@ -45,8 +44,8 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
         Map metadata = [:]
         metadata.formatVersion = "1.1"
         metadata.component = [
-                group: moduleGroup.get(),
-                module: moduleName.get(),
+                group  : moduleGroup.get(),
+                module : moduleName.get(),
                 version: moduleVersion.get()
         ]
         List variants = []
@@ -63,91 +62,63 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
         List clientDepEntries = []
         List serverDepEntries = []
         clientDepEntries.add([
-                group: moduleGroup.get(),
-                module: moduleName.get(),
-                version: [strictly: moduleVersion.get()],
+                group                : moduleGroup.get(),
+                module               : moduleName.get(),
+                version              : [strictly: moduleVersion.get()],
                 endorseStrictVersions: true,
                 requestedCapabilities: [
                         [
                                 group: moduleGroup.get(),
-                                name: moduleName.get()+"-natives"
+                                name : moduleName.get() + "-natives"
                         ]
                 ]
         ])
         clientDepEntries.addAll(depsOf(clientDeps))
         serverDepEntries.addAll(depsOf(serverDeps))
         variants.add([
-                name: 'clientDependencies',
-                attributes: [
-                        'org.gradle.jvm.version': javaVersion,
+                name        : 'clientDependencies',
+                attributes  : [
+                        'org.gradle.jvm.version'    : javaVersion,
                         'net.neoforged.distribution': 'client'
                 ],
                 dependencies: clientDepEntries,
                 capabilities: [[
-                                       group: moduleGroup.get(),
-                                       name: moduleName.get()+"-dependencies",
+                                       group  : moduleGroup.get(),
+                                       name   : moduleName.get() + "-dependencies",
                                        version: moduleVersion.get(),
                                ]]
         ])
         variants.add([
-                name: 'serverDependencies',
-                attributes: [
-                        'org.gradle.jvm.version': javaVersion,
+                name        : 'serverDependencies',
+                attributes  : [
+                        'org.gradle.jvm.version'    : javaVersion,
                         'net.neoforged.distribution': 'server'
                 ],
                 dependencies: serverDepEntries,
                 capabilities: [[
-                                       group: moduleGroup.get(),
-                                       name: moduleName.get()+"-dependencies",
+                                       group  : moduleGroup.get(),
+                                       name   : moduleName.get() + "-dependencies",
                                        version: moduleVersion.get(),
                                ]]
         ])
 
-        platforms.each {os ->
+        platforms.each { os ->
             List<String> nativeList = clientNatives.get(os) ?: []
             variants.add([
-                    name: 'client'+os.capitalize()+'Natives',
-                    attributes: [
-                            'org.gradle.jvm.version': javaVersion,
-                            'net.neoforged.distribution': 'client',
+                    name        : 'client' + os.capitalize() + 'Natives',
+                    attributes  : [
+                            'org.gradle.jvm.version'       : javaVersion,
+                            'net.neoforged.distribution'   : 'client',
                             'net.neoforged.operatingsystem': os
                     ],
                     dependencies: depsOf(nativeList),
                     capabilities: [
                             [
-                                    group: moduleGroup.get(),
-                                    name: moduleName.get()+"-natives",
+                                    group  : moduleGroup.get(),
+                                    name   : moduleName.get() + "-natives",
                                     version: moduleVersion.get()
                             ]
                     ]
-            ])
-        }
-
-        [
-                client: clientJar.get().asFile,
-                server: serverJar.get().asFile
-        ].each { it, file ->
-            variants.add([
-                    name: it,
-                    attributes: [
-                            'org.gradle.jvm.version': javaVersion,
-                            'net.neoforged.distribution': it
-                    ],
-                    dependencies: [
-                            [
-                                    group: moduleGroup.get(),
-                                    module: moduleName.get(),
-                                    version: [strictly: moduleVersion.get()],
-                                    endorseStrictVersions: true,
-                                    requestedCapabilities: [
-                                            [
-                                                    group: moduleGroup.get(),
-                                                    name: moduleName.get()+"-dependencies"
-                                            ]
-                                    ]
-                            ]
-                    ],
-                    files: [getFileFor(file, ((metaJson.downloads as Map)[it] as Map).url as String)]
             ])
         }
 
@@ -160,8 +131,8 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
         Map metaJson = new JsonSlurper().parse(meta.get().asFile) as Map
         (metaJson.libraries as List<Map<String, Object>>).each { Map lib ->
             Map downloads = lib.downloads as Map
-            List<String> allow = ((lib.rules ?: []) as List<Map<String, Object>>).findAll {it.action == "allow"}.collect { (it.os as Map)?.name as String }.findAll {it !== null}
-            List<String> disallow = ((lib.rules ?: []) as List<Map<String, Object>>).findAll {it.action == "disallow"}.collect { (it.os as Map)?.name as String }.findAll {it !== null}
+            List<String> allow = ((lib.rules ?: []) as List<Map<String, Object>>).findAll { it.action == "allow" }.collect { (it.os as Map)?.name as String }.findAll { it !== null }
+            List<String> disallow = ((lib.rules ?: []) as List<Map<String, Object>>).findAll { it.action == "disallow" }.collect { (it.os as Map)?.name as String }.findAll { it !== null }
             if (downloads.artifact) {
                 if (allow.empty && disallow.empty) {
                     client.add lib.name as String
@@ -169,14 +140,14 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
                     List<String> platforms = new ArrayList<>(allow.empty ? platforms : allow)
                     platforms.removeAll(disallow)
                     platforms.each {
-                        clientNatives.computeIfAbsent(it, {[]}).add(lib.name as String)
+                        clientNatives.computeIfAbsent(it, { [] }).add(lib.name as String)
                     }
                 }
             }
             if (lib.natives) {
                 Map<String, String> natives = lib.natives as Map<String, String>
                 natives.each { platform, classifier ->
-                    clientNatives.computeIfAbsent(platform, {[]}).add("${lib.name}:${classifier}" as String)
+                    clientNatives.computeIfAbsent(platform, { [] }).add("${lib.name}:${classifier}" as String)
                 }
             }
         }
@@ -226,35 +197,8 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
             artifactSelector.extension = extension
             artifactSelector.type = extension
             artifactSelector.name = parts[1]
-            map.thirdPartyCompatibility = ['artifactSelector':artifactSelector]
+            map.thirdPartyCompatibility = ['artifactSelector': artifactSelector]
         }
         return map
-    }
-
-    private Map getFileFor(File file, String url) {
-        Map out = [:]
-        out.name = "${getModuleName().get()}-${getModuleVersion().get()}.jar" as String
-        out.url = url
-        MessageDigest md5 = MessageDigest.getInstance("MD5")
-        MessageDigest sha1 = MessageDigest.getInstance("SHA-1")
-        MessageDigest sha256 = MessageDigest.getInstance("SHA-256")
-        MessageDigest sha512 = MessageDigest.getInstance("SHA-512")
-        try (
-                def is = new FileInputStream(file)
-                def md5Dis = new DigestInputStream(is, md5)
-                def sha1Dis = new DigestInputStream(md5Dis, sha1)
-                def sha256Dis = new DigestInputStream(sha1Dis, sha256)
-                def sha512Dis = new DigestInputStream(sha256Dis, sha512)
-        ) {
-            while(sha512Dis.read() != -1) {
-                // Read the stream to the end
-            }
-        }
-        out.md5 = md5.digest().encodeHex() as String
-        out.sha1 = sha1.digest().encodeHex() as String
-        out.sha256 = sha256.digest().encodeHex() as String
-        out.sha512 = sha512.digest().encodeHex() as String
-        out['size'] = file.length()
-        return out
     }
 }
