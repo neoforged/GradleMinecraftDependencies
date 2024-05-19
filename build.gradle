@@ -7,7 +7,6 @@ repositories {
     mavenCentral()
 }
 
-
 import groovy.json.JsonSlurper
 import net.neoforged.minecraftdependencies.*
 
