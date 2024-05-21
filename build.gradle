@@ -32,19 +32,6 @@ tasks.register('downloadJson', DownloadWithVersion) {
     quiet true
 }
 
-tasks.register('downloadClientJar', DownloadWithVersion) {
-    dependsOn tasks.downloadJson
-    def versionJson = tasks.downloadJson.dest
-    inputs.file versionJson
-    src {
-        new JsonSlurper().parse(versionJson).downloads.client.url
-    }
-    dest layout.buildDirectory.file(moduleVersion.map { "versions/$it/client.jar"})
-    useETag 'all'
-    onlyIfModified true
-    quiet true
-}
-
 tasks.register('downloadServerJar', DownloadWithVersion) {
     dependsOn tasks.downloadJson
     def versionJson = tasks.downloadJson.dest
@@ -60,11 +47,9 @@ tasks.register('downloadServerJar', DownloadWithVersion) {
 
 tasks.register('makeModuleMetadata', GenerateModuleMetadata) {
     dependsOn tasks.downloadJson
-    dependsOn tasks.downloadClientJar
     dependsOn tasks.downloadServerJar
 
     meta = tasks.downloadJson.dest
-    clientJar = tasks.downloadClientJar.dest
     serverJar = tasks.downloadServerJar.dest
 
     moduleGroup = project.group
