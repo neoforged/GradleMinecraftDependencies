@@ -148,7 +148,7 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
                 attributes  : [
                         'org.gradle.category'       : 'platform',
                         'org.gradle.jvm.version'    : javaVersion,
-                        'net.neoforged.distribution': 'client'
+                        'net.neoforged.distribution': 'server'
                 ],
                 dependencies: serverDepEntries,
                 capabilities: [
