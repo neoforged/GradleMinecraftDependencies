@@ -114,7 +114,14 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
                         'org.gradle.jvm.version'    : javaVersion,
                         'net.neoforged.distribution': 'client'
                 ],
-                dependencies: clientPlatformDepEntries
+                dependencies: clientPlatformDepEntries,
+                capabilities: [
+                        [
+                                group  : moduleGroup.get(),
+                                name   : moduleName.get() + "-client",
+                                version: moduleVersion.get()
+                        ]
+                ]
         ])
         variants.add([
                 name        : 'serverCompileDependencies',
@@ -137,13 +144,20 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
                 dependencies: serverDepEntries
         ])
         variants.add([
-                name        : 'clientPlatform',
+                name        : 'serverPlatform',
                 attributes  : [
                         'org.gradle.category'       : 'platform',
                         'org.gradle.jvm.version'    : javaVersion,
                         'net.neoforged.distribution': 'client'
                 ],
-                dependencies: serverDepEntries
+                dependencies: serverDepEntries,
+                capabilities: [
+                        [
+                                group  : moduleGroup.get(),
+                                name   : moduleName.get() + "-server",
+                                version: moduleVersion.get()
+                        ]
+                ]
         ])
 
         platforms.each { os ->
