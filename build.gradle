@@ -1,6 +1,7 @@
 plugins {
     id 'de.undercouch.download'
     id 'maven-publish'
+    id 'net.neoforged.gradleutils' version '3.0.0-alpha.13'
 }
 
 repositories {
@@ -65,6 +66,7 @@ def moduleMetadataArtifact = artifacts.add('moduleMetadata', tasks.makeModuleMet
     builtBy tasks.makeModuleMetadata
 }
 
+import net.neoforged.gradleutils.GradleUtils
 publishing {
     publications {
         timed(MavenPublication) {
@@ -77,6 +79,14 @@ publishing {
                     def comment = elem.getOwnerDocument().createComment(' do_not_remove: published-with-gradle-metadata ')
                     elem.insertBefore(comment, elem.getFirstChild())
                 }
+            }
+            repositories {
+                maven(GradleUtils.setupSnapshotCompatiblePublishing(
+                        project.providers.gradleProperty('minecraftVersion'),
+                        'https://maven.neoforged.net/mojang-meta/',
+                        file('repo'),
+                        file('snapshot')
+                ))
             }
         }
     }
