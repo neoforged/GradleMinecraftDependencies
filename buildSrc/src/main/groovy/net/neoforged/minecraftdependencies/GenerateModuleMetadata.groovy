@@ -24,10 +24,6 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
     @PathSensitive(PathSensitivity.NONE)
     abstract RegularFileProperty getServerJar()
 
-    @InputFile
-    @PathSensitive(PathSensitivity.NONE)
-    abstract RegularFileProperty getClientJar()
-
     @Input
     abstract Property<String> getModuleGroup()
 

@@ -1,12 +1,12 @@
 plugins {
     id 'de.undercouch.download'
     id 'maven-publish'
+    id 'net.neoforged.gradleutils' version '3.0.0-alpha.13'
 }
 
 repositories {
     mavenCentral()
 }
-
 
 import groovy.json.JsonSlurper
 import net.neoforged.minecraftdependencies.*
@@ -33,19 +33,6 @@ tasks.register('downloadJson', DownloadWithVersion) {
     quiet true
 }
 
-tasks.register('downloadClientJar', DownloadWithVersion) {
-    dependsOn tasks.downloadJson
-    def versionJson = tasks.downloadJson.dest
-    inputs.file versionJson
-    src {
-        new JsonSlurper().parse(versionJson).downloads.client.url
-    }
-    dest layout.buildDirectory.file(moduleVersion.map { "versions/$it/client.jar"})
-    useETag 'all'
-    onlyIfModified true
-    quiet true
-}
-
 tasks.register('downloadServerJar', DownloadWithVersion) {
     dependsOn tasks.downloadJson
     def versionJson = tasks.downloadJson.dest
@@ -61,11 +48,9 @@ tasks.register('downloadServerJar', DownloadWithVersion) {
 
 tasks.register('makeModuleMetadata', GenerateModuleMetadata) {
     dependsOn tasks.downloadJson
-    dependsOn tasks.downloadClientJar
     dependsOn tasks.downloadServerJar
 
     meta = tasks.downloadJson.dest
-    clientJar = tasks.downloadClientJar.dest
     serverJar = tasks.downloadServerJar.dest
 
     moduleGroup = project.group
@@ -81,6 +66,7 @@ def moduleMetadataArtifact = artifacts.add('moduleMetadata', tasks.makeModuleMet
     builtBy tasks.makeModuleMetadata
 }
 
+import net.neoforged.gradleutils.GradleUtils
 publishing {
     publications {
         timed(MavenPublication) {
@@ -93,6 +79,14 @@ publishing {
                     def comment = elem.getOwnerDocument().createComment(' do_not_remove: published-with-gradle-metadata ')
                     elem.insertBefore(comment, elem.getFirstChild())
                 }
+            }
+            repositories {
+                maven(GradleUtils.setupSnapshotCompatiblePublishing(
+                        project.providers.gradleProperty('minecraftVersion'),
+                        'https://maven.neoforged.net/mojang-meta/',
+                        file('repo'),
+                        file('snapshot')
+                ))
             }
         }
     }

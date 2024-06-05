@@ -4,6 +4,10 @@ build/
 !**/src/main/**/build/
 !**/src/test/**/build/
 
+# Repos
+/repo
+/snapshot
+
 ### IntelliJ IDEA ###
 .idea
 
