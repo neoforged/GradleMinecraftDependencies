@@ -11,6 +11,12 @@ repositories {
 import groovy.json.JsonSlurper
 import net.neoforged.minecraftdependencies.*
 
+if (!project.hasProperty("minecraftVersion")) {
+     throw new GradleException("Please set a minecraftVersion Gradle property")
+}
+
+version = project.minecraftVersion
+
 tasks.register('downloadVersionManifest', Download) {
     src 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'
     dest layout.buildDirectory.file('manifest/version_manifest_v2.json')
@@ -71,7 +77,6 @@ publishing {
     publications {
         timed(MavenPublication) {
             artifactId rootProject.name
-            version project.providers.gradleProperty('minecraftVersion').orElse('undefined').get()
             artifact moduleMetadataArtifact
             pom {
                 withXml {
@@ -82,7 +87,7 @@ publishing {
             }
             repositories {
                 maven(GradleUtils.setupSnapshotCompatiblePublishing(
-                        project.providers.gradleProperty('minecraftVersion'),
+                        project.providers.provider { project.version },
                         'https://maven.neoforged.net/mojang-meta/',
                         file('repo'),
                         file('snapshot')
