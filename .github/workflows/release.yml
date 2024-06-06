@@ -21,7 +21,7 @@ jobs:
     with:
       java: 21
       gradle_tasks: publish "-PminecraftVersion=${{ github.event.inputs.minecraft_version }}"
-      version_task: configureGitHubActions
+      version_task: configureGitHubActions "-PminecraftVersion=${{ github.event.inputs.minecraft_version }}"
     secrets:
       DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
       MAVEN_USER: ${{ secrets.MAVEN_USER }}
