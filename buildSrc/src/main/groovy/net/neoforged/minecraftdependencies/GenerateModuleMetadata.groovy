@@ -6,9 +6,17 @@ import groovy.transform.CompileStatic
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
-import org.gradle.api.tasks.*
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import org.gradle.api.tasks.TaskAction
 
 import javax.inject.Inject
+import java.util.jar.JarInputStream
+import java.util.stream.Collectors
+import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 
 @CompileStatic
@@ -34,6 +42,12 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
     GenerateModuleMetadata() {
         this.moduleVersion.convention(project.providers.gradleProperty('minecraftVersion').orElse('undefined'))
     }
+
+    private static final Map<String, String> potentialLibraryUpgrades = Map.of(
+            // 1.7.10 server jar contained guava 16 instead of 15
+            "com.google.guava:guava:15.0", "com.google.guava:guava:16.0",
+            "org.apache.commons:commons-lang3:3.1", "org.apache.commons:commons-lang3:3.2.1"
+    )
 
     @TaskAction
     void run() {
@@ -163,6 +177,48 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
 
     private static final List<String> platforms = ["windows", "osx", "linux"]
 
+    private Map<String, String> getFileFingerprints(String artifactId) {
+        var listingFile = new File(temporaryDir, artifactId.replace(':', '-') + ".txt")
+        if (listingFile.exists()) {
+            return listingFile.readLines()
+                    .stream()
+                    .map(v -> v.split("\\|", 2))
+                    .collect(Collectors.toMap((String[] v) -> v[0], (String[] v) -> v[1]))
+        }
+
+        var parts = artifactId.split(":")
+        String relativeUrl
+        if (parts.length == 3) {
+            relativeUrl = parts[0].replace('.', '/') + "/" + parts[1] + "/" + parts[2] + "/" + parts[1] + "-" + parts[2] + ".jar"
+        } else {
+            relativeUrl = parts[0].replace('.', '/') + "/" + parts[1] + "/" + parts[2] + "/" + parts[1] + "-" + parts[2] + "-" + parts[3] + ".jar"
+        }
+        var url = URI.create("https://libraries.minecraft.net/" + relativeUrl).toURL()
+        println("Getting $url")
+        var hashes = new HashMap<String, String>()
+        url.openStream().with { input ->
+            var jin = new JarInputStream(input)
+            for (var entry = jin.nextJarEntry; entry != null; entry = jin.nextJarEntry) {
+                if (entry.name.endsWith("/")) {
+                    continue
+                }
+                if (!entry.name.startsWith("META-INF/")) {
+                    hashes[entry.name] = jin.readAllBytes().md5()
+                }
+            }
+        }
+
+        println("Hashed ${hashes.size()} files in jar")
+
+        try (var writer = listingFile.newWriter()) {
+            for (var entry in hashes.entrySet()) {
+                writer.writeLine(entry.getKey() + "|" + entry.getValue())
+            }
+        }
+
+        return hashes
+    }
+
     private void getMcDeps(List<String> server, List<String> client, Map<String, List<String>> clientNatives) {
         Map metaJson = new JsonSlurper().parse(meta.get().asFile) as Map
         (metaJson.libraries as List<Map<String, Object>>).each { Map lib ->
@@ -188,16 +244,86 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
             }
         }
         try (def zf = new ZipFile(serverJar.get().getAsFile())) {
-            def entry = zf.getEntry('META-INF/libraries.list')
-            if (entry != null) {
-                try (def is = zf.getInputStream(entry)) {
+            def librariesListEntry = zf.getEntry('META-INF/libraries.list')
+            if (librariesListEntry != null) {
+                try (def is = zf.getInputStream(librariesListEntry)) {
                     is.readLines().each {
                         server.add(it.split('\t')[1])
                     }
                 }
             } else {
-                throw new RuntimeException("Could not find libraries.list inside of server.jar")
+                // This will be slow.
+
+                // Fingerprint all files found in the server jar
+                var fileFingerprints = new HashMap<String, String>();
+                zf.entries().iterator().each { ZipEntry it ->
+                    if (it.name.endsWith("/")) {
+                        return
+                    }
+                    zf.getInputStream(it).withCloseable { stream ->
+                        fileFingerprints[it.name] = stream.readAllBytes().md5()
+                    }
+                }
+
+                var libraries = new LinkedHashSet<String>()
+
+                // For each client library, find the list of folders contained within
+                // We need to do this in order of the declared libraries since mojang chose to fix log4j2 issues
+                // by introducing a higherpriority library that contains files from log4j2 and netty
+                for (var artifactId in client) {
+                    var result = matchLibraryAgainstServerJar(artifactId, fileFingerprints)
+                    while (result == null) {
+                        // Result was uncertain
+                        var upgradedLib = potentialLibraryUpgrades[artifactId]
+                        if (upgradedLib) {
+                            println("Trying upgrade from $artifactId to $upgradedLib")
+                            artifactId = upgradedLib
+                            result = matchLibraryAgainstServerJar(upgradedLib, fileFingerprints)
+                            if (result) {
+                                break // Upgrade successful
+                            }
+                        } else {
+                            break
+                        }
+                    }
+
+                    if (result == null) {
+                        println("*** Including partial match: $artifactId")
+                        libraries.add(artifactId)
+                    } else if (result) {
+                        libraries.add(artifactId)
+                    }
+                }
+
+                server.addAll(libraries)
             }
+        }
+    }
+
+    private Boolean matchLibraryAgainstServerJar(String artifactId, Map<String, String> fileFingerprints) {
+        var libFileFingerprints = getFileFingerprints(artifactId)
+        var matches = 0
+        var mismatches = new ArrayList<String>()
+        var missing = new ArrayList<String>()
+        for (var entry in libFileFingerprints.entrySet()) {
+            if (fileFingerprints.containsKey(entry.key)) {
+                if (fileFingerprints[entry.key] == entry.value) {
+                    matches++
+                } else {
+                    mismatches.add(entry.key)
+                }
+            } else {
+                missing.add(entry.key)
+            }
+        }
+        if (matches == 0 && mismatches.size() == 0) {
+            return false // Assuredly missing
+        } else if (matches == libFileFingerprints.size()) {
+            println(" Matched $artifactId")
+            return true
+        } else {
+            println(" Not sure about $artifactId matches=$matches mismatches=${mismatches.size()} missing=${missing.size()}")
+            return null
         }
     }
 
