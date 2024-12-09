@@ -222,7 +222,7 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
         return hashes
     }
 
-    private void getMcDeps(List<String> server, List<String> client, Map<String, List<String>> clientNatives) {
+    private void getMcDeps(List<String> server, List<String> client, List<String> clientCompileOnly, Map<String, List<String>> clientNatives) {
         Map metaJson = new JsonSlurper().parse(meta.get().asFile) as Map
         (metaJson.libraries as List<Map<String, Object>>).each { Map lib ->
             Map downloads = lib.downloads as Map
