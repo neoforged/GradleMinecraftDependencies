@@ -17,8 +17,73 @@ on:
 
 jobs:
   build:
-    uses: neoforged/actions/.github/workflows/build-prs.yml@main
-    with:
-      java: 21
-      gradle_tasks: makeModuleMetadata
-      jar_compatibility: false
+    strategy:
+      matrix:
+        version:
+          - 1.7.10
+          - 1.10.2
+          - 1.12.2
+          - 1.16.5
+          - 1.18.2
+          - 1.19.2
+          - 1.20.1
+          - 1.21.1
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1000
+          fetch-tags: true
+
+      # Switch to a new branch with the PR number and PR branch name,
+      # for the projects where the buildscript uses the branch name
+      - name: Create branch for commit
+        run:
+          git switch -C pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.ref }}
+
+      - name: Setup Java ${{ inputs.java }}
+        uses: neoforged/actions/setup-java@main
+        with:
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Build with Gradle
+        run: ./gradlew publish -PminecraftVersion=${{ matrix.version }}
+
+      - name: Store repository
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo-${{ matrix.version }}
+          path: repo
+
+  merge-repos:
+    name: Merge Maven Repositories
+    runs-on: ubuntu-latest
+    needs: build
+    if: success() || failure()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: repo-*
+          path: repo
+          merge-multiple: true
+      # the maven-metadata will only be from a single repo and thus wrong
+      - name: Remove incorrect maven-metadata files
+        run: find -name maven-metadata.xml* -exec rm {} \;
+      - name: Upload repository for manual consumption
+        uses: actions/upload-artifact@v4
+        with:
+          name: repo
+          path: repo
+      - name: Upload repository for PR-Publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: maven-publish
+          path: repo
