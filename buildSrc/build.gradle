@@ -4,4 +4,5 @@ repositories {
 
 dependencies {
     implementation 'de.undercouch.download:de.undercouch.download.gradle.plugin:5.5.0'
+    implementation 'org.apache.maven:maven-artifact:3.9.9'
 }

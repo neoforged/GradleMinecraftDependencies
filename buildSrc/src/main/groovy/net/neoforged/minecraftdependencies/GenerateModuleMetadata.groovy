@@ -3,6 +3,7 @@ package net.neoforged.minecraftdependencies
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import groovy.transform.CompileStatic
+import org.apache.maven.artifact.versioning.ComparableVersion
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
@@ -62,9 +63,10 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
         metadata.variants = variants
 
         List<String> clientDeps = []
+        List<String> clientCompileOnlyDeps = []
         List<String> serverDeps = []
         Map<String, List<String>> clientNatives = [:]
-        getMcDeps(serverDeps, clientDeps, clientNatives)
+        getMcDeps(serverDeps, clientDeps, clientCompileOnlyDeps, clientNatives)
 
         Map metaJson = new JsonSlurper().parse(meta.get().asFile) as Map
         int javaVersion = (metaJson.javaVersion as Map).majorVersion as int
@@ -93,6 +95,7 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
         if (objcBridge) {
             clientDepEntries.add(depOf(objcBridge))
         }
+        clientDepEntries.addAll(depsOf(clientCompileOnlyDeps))
 
         variants.add([
                 name        : 'clientCompileDependencies',
@@ -243,6 +246,50 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
                 }
             }
         }
+
+        // Remove duplicates in natives
+        for (var libs in clientNatives.values()) {
+            var dedupedLibs = new LinkedHashSet(libs)
+            libs.clear()
+            libs.addAll(dedupedLibs)
+        }
+
+        // Promote natives to compile time dependencies if the same G+A+Classifier is present for all platforms
+        // Use the lowest version. This happens on some versions (i.e. 1.18.2) where lwjgl and all such dependencies
+        // are used in a lower version on OSX
+        for (String windowNativeArtifact in clientNatives.getOrDefault(platforms[0], [])) {
+            var coordinate = MavenCoordinate.parse(windowNativeArtifact)
+            var version = new ComparableVersion(coordinate.version())
+
+            var inAllPlatforms = true
+            for (var otherPlatform in platforms.drop(1)) {
+                var found = false
+                for (var otherPlatformArtifact in clientNatives.getOrDefault(otherPlatform, [])) {
+                    var otherPlatformCoordinate = MavenCoordinate.parse(otherPlatformArtifact)
+                    if (coordinate.equalsIgnoringVersion(otherPlatformCoordinate)) {
+                        found = true
+                        var otherVersion = new ComparableVersion(otherPlatformCoordinate.version())
+                        if (otherVersion < version) {
+                            version = otherVersion // use lowest
+                        }
+                        break
+                    }
+                }
+                if (!found) {
+                    inAllPlatforms = false
+                    break
+                }
+            }
+
+            if (inAllPlatforms) {
+                println("Promoting " + coordinate + " (" + version + ") from natives to compile time dependency")
+                coordinate = coordinate.withVersion(version.toString())
+                if (client.stream().map(MavenCoordinate::parse).noneMatch { c -> c.equalsIgnoringVersion(coordinate) }) {
+                    clientCompileOnly.add(coordinate.toString())
+                }
+            }
+        }
+
         try (def zf = new ZipFile(serverJar.get().getAsFile())) {
             def librariesListEntry = zf.getEntry('META-INF/libraries.list')
             if (librariesListEntry != null) {
