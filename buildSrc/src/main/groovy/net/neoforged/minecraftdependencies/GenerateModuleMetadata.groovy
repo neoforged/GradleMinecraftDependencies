@@ -401,8 +401,7 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
     @CompileDynamic
     private static Collection commonDeps(List... lists) {
         Map<String, Map> highestVersion = [:]
-        for (int i = 0; i < lists.size(); i++) {
-            var list = lists[i]
+        for (var list : lists) {
             list.forEach { Map item ->
                 var id = item.group + ':' + item.module
                 highestVersion.merge(id, item) { oldValue, newValue ->
