@@ -2,6 +2,7 @@ package net.neoforged.minecraftdependencies
 
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
+import groovy.transform.CompileDynamic
 import groovy.transform.CompileStatic
 import org.apache.maven.artifact.versioning.ComparableVersion
 import org.gradle.api.DefaultTask
@@ -100,6 +101,7 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
         variants.add([
                 name        : 'clientCompileDependencies',
                 attributes  : [
+                        'org.gradle.category'       : 'library',
                         'org.gradle.usage'          : 'java-api',
                         'org.gradle.jvm.version'    : javaVersion,
                         'net.neoforged.distribution': 'client'
@@ -114,6 +116,7 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
         variants.add([
                 name        : 'clientRuntimeDependencies',
                 attributes  : [
+                        'org.gradle.category'       : 'library',
                         'org.gradle.usage'          : 'java-runtime',
                         'org.gradle.jvm.version'    : javaVersion,
                         'net.neoforged.distribution': 'client'
@@ -128,6 +131,7 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
         variants.add([
                 name        : 'serverCompileDependencies',
                 attributes  : [
+                        'org.gradle.category'       : 'library',
                         'org.gradle.usage'          : 'java-api',
                         'org.gradle.jvm.version'    : javaVersion,
                         'net.neoforged.distribution': 'server'
@@ -142,6 +146,7 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
         variants.add([
                 name        : 'serverRuntimeDependencies',
                 attributes  : [
+                        'org.gradle.category'       : 'library',
                         'org.gradle.usage'          : 'java-runtime',
                         'org.gradle.jvm.version'    : javaVersion,
                         'net.neoforged.distribution': 'server'
@@ -154,11 +159,30 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
                                ]]
         ])
 
+        variants.add([
+                name        : 'platformDependencies',
+                attributes  : [
+                        'org.gradle.usage'          : 'java-api',
+                        'org.gradle.category'       : 'platform'
+                ],
+                dependencyConstraints: commonDeps(clientDepEntries, serverDepEntries)
+        ])
+
+        variants.add([
+                name        : 'platformRuntimeDependencies',
+                attributes  : [
+                        'org.gradle.usage'          : 'java-runtime',
+                        'org.gradle.category'       : 'platform'
+                ],
+                dependencyConstraints: commonDeps(clientDepEntriesForRuntime, serverDepEntries)
+        ])
+
         platforms.each { os ->
             List<String> nativeList = clientNatives.get(os) ?: []
             variants.add([
                     name        : 'client' + os.capitalize() + 'Natives',
                     attributes  : [
+                            'org.gradle.category'          : 'library',
                             'org.gradle.usage'             : 'java-runtime',
                             'org.gradle.jvm.version'       : javaVersion,
                             'net.neoforged.distribution'   : 'client',
@@ -372,6 +396,24 @@ abstract class GenerateModuleMetadata extends DefaultTask implements HasMinecraf
             println(" Not sure about $artifactId matches=$matches mismatches=${mismatches.size()} missing=${missing.size()}")
             return null
         }
+    }
+
+    @CompileDynamic
+    private static Collection commonDeps(List... lists) {
+        Map<String, Map> highestVersion = [:]
+        for (var list : lists) {
+            list.forEach { Map item ->
+                var id = item.group + ':' + item.module
+                highestVersion.merge(id, item) { oldValue, newValue ->
+                    // Prefer lowest version
+                    if ((new ComparableVersion(oldValue.version.strictly) < new ComparableVersion(oldValue.version.strictly))) {
+                        return oldValue
+                    }
+                    return newValue
+                }
+            }
+        }
+        return highestVersion.values()
     }
 
     private static List depsOf(List<String> deps) {
